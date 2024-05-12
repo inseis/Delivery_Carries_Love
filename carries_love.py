@@ -6,7 +6,7 @@ class DatabaseManager:
     _instance = None
     _lock = Lock()
 
-    # 싱글턴 구현: 인스턴스 생성 제어
+    # 싱글턴 구현: 인스턴스 생성 제어,
     def __new__(cls):
         with cls._lock:
             if not cls._instance:
