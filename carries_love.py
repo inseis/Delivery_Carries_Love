@@ -171,25 +171,70 @@ class Branch(Observer):
         """
         logging.info(f"{self.name} 알림: {state}")
 
-def setup_package(destination: str, shipping_type: str) -> None:
+class PackageTracker:
     """
-    배송 옵션 및 목적지를 설정하고 처리하는 함수
+    패키지 추적 기능을 제공하는 클래스
+    """
+    def __init__(self, package_id: str):
+        self.package_id = package_id
+        self.history = []
+
+    def update_status(self, status: str):
+        """
+        패키지 상태를 업데이트하고 기록합니다.
+        :param status: 새로운 상태
+        """
+        self.history.append(status)
+        logging.info(f"패키지 {self.package_id} 상태 업데이트: {status}")
+
+    def get_history(self) -> List[str]:
+        """
+        패키지의 전체 상태 기록을 반환합니다.
+        :return: 상태 기록 리스트
+        """
+        return self.history
+
+class TrackedPackage(Subject):
+    """
+    상태 변화를 알리는 옵저버 패턴의 주체 클래스, 패키지 추적 기능 포함
+    """
+    def __init__(self, package_id: str):
+        super().__init__()
+        self.tracker = PackageTracker(package_id)
+
+    def set_state(self, state: str, event_type: str) -> None:
+        """
+        주어진 상태로 변경하고 해당 이벤트 유형의 옵저버들에게 알립니다.
+        :param state: 새로운 상태
+        :param event_type: 상태 변화를 알릴 이벤트 유형
+        """
+        self.tracker.update_status(state)
+        self._state = state
+        self.notify(event_type)
+
+def setup_tracked_package(destination: str, shipping_type: str, package_id: str) -> None:
+    """
+    배송 옵션 및 목적지를 설정하고 처리하는 함수, 패키지 추적 기능 포함
     :param destination: 배송 목적지
     :param shipping_type: 배송 유형
+    :param package_id: 패키지 ID
     """
-    package = Subject()
+    package = TrackedPackage(package_id)
     branch_name = destination.capitalize() + " 지점"
     branch = Branch(branch_name)
     package.attach(branch, "배송 시작")
 
     shipping_option = shipping_factory.get_shipping_strategy(shipping_type)
-    logging.info(f"목적지: {destination} - 배송 유형: {shipping_type} - 비용: {shipping_option.calculate_cost()} 원")
+    logging.info(f"패키지 ID: {package_id} - 목적지: {destination} - 배송 유형: {shipping_type} - 비용: {shipping_option.calculate_cost()} 원")
 
     package.set_state("배송 준비 완료", "배송 시작")
     package.set_state("배송 중", "배송 중")
     package.set_state(destination + "에 도착", "배송 도착")
     package.detach(branch, "배송 도착")
     package.set_state("배송 완료", "배송 완료")
+
+    # 배송 기록 출력
+    logging.info(f"패키지 {package_id} 배송 기록: {package.tracker.get_history()}")
 
 # 전역 변수로 팩토리 인스턴스를 초기화
 shipping_factory = ShippingFactory()
@@ -200,10 +245,20 @@ shipping_types = ["일반", "익일", "국제"]
 
 for destination in destinations:
     for shipping_type in shipping_types:
-        setup_package(destination, shipping_type)
+        package_id = f"{destination}_{shipping_type}_{hash(destination + shipping_type)}"
+        setup_tracked_package(destination, shipping_type, package_id)
 
 # 오류 처리: 알 수 없는 배송 타입 처리
 try:
-    setup_package("인천", "알 수 없는 유형")
+    setup_tracked_package("인천", "알 수 없는 유형", "incheon_unknown")
 except ValueError as e:
     logging.error(e)
+
+# 추가 예제: 다양한 목적지와 배송 옵션을 사용한 추가 테스트
+additional_destinations = ["대구", "광주", "대전"]
+additional_shipping_types = ["일반", "익일", "국제"]
+
+for destination in additional_destinations:
+    for shipping_type in additional_shipping_types:
+        package_id = f"{destination}_{shipping_type}_{hash(destination + shipping_type)}"
+        setup_tracked_package(destination, shipping_type, package_id)
