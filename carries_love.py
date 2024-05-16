@@ -3,11 +3,11 @@ from threading import Lock
 from typing import Dict, Optional, Type, List
 import logging
 import weakref
+import random
+from datetime import datetime, timedelta
 
-# 로깅 설정
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# 싱글턴 데코레이터
 def singleton(cls):
     instances = {}
     def get_instance(*args, **kwargs):
@@ -18,247 +18,272 @@ def singleton(cls):
 
 @singleton
 class DatabaseManager:
-    """
-    싱글턴 패턴을 사용하는 데이터베이스 관리자 클래스
-    """
-    _lock = Lock()  # 스레드 안전을 보장하기 위한 락
+    _lock = Lock()
 
     def __init__(self):
-        self._data = {}  # 가상 데이터베이스 초기화
+        self._data = {}
 
     def get_data(self, key: str) -> Optional[str]:
-        """
-        주어진 키에 해당하는 데이터를 반환합니다.
-        :param key: 데이터베이스에서 조회할 키
-        :return: 키에 해당하는 데이터 값
-        """
         return self._data.get(key)
 
     def set_data(self, key: str, value: str) -> None:
-        """
-        주어진 키와 값으로 데이터를 설정합니다.
-        :param key: 데이터베이스에 설정할 키
-        :param value: 키에 설정할 값
-        """
         self._data[key] = value
 
 class ShippingStrategy(ABC):
-    """
-    배송 전략을 정의하는 추상 베이스 클래스
-    """
     @abstractmethod
     def calculate_cost(self) -> float:
-        """
-        배송 비용을 계산하는 메소드
-        :return: 배송 비용
-        """
+        pass
+
+    @abstractmethod
+    def get_delivery_steps(self, destination: str, origin: str, departure_time: datetime) -> List[str]:
+        pass
+
+    @abstractmethod
+    def calculate_arrival_time(self, departure_time: datetime) -> datetime:
         pass
 
 class StandardShipping(ShippingStrategy):
-    """
-    표준 배송 전략 클래스
-    """
     def calculate_cost(self) -> float:
         return 5.00
 
+    def get_delivery_steps(self, destination: str, origin: str, departure_time: datetime) -> List[str]:
+        arrival_time = self.calculate_arrival_time(departure_time)
+        return [f"{origin}에서 {departure_time}에 출발", "배송 중", f"{destination}에 {arrival_time}에 도착", "배송 완료"]
+
+    def calculate_arrival_time(self, departure_time: datetime) -> datetime:
+        return departure_time + timedelta(days=2, hours=0)
+
 class NextDayShipping(ShippingStrategy):
-    """
-    익일 배송 전략 클래스
-    """
     def calculate_cost(self) -> float:
         return 20.00
 
+    def get_delivery_steps(self, destination: str, origin: str, departure_time: datetime) -> List[str]:
+        arrival_time = self.calculate_arrival_time(departure_time)
+        return [f"{origin}에서 {departure_time}에 출발", "배송 중", f"{destination}에 {arrival_time}에 도착", "배송 완료"]
+
+    def calculate_arrival_time(self, departure_time: datetime) -> datetime:
+        return departure_time + timedelta(days=1, hours=0)
+
 class InternationalShipping(ShippingStrategy):
-    """
-    국제 배송 전략 클래스
-    """
     def calculate_cost(self) -> float:
         return 15.00
 
+    def get_delivery_steps(self, destination: str, origin: str, departure_time: datetime) -> List[str]:
+        arrival_time = self.calculate_arrival_time(departure_time)
+        return [f"{origin}에서 {departure_time}에 출발", "배송 중", f"{destination}에 {arrival_time}에 도착", "배송 완료"]
+
+    def calculate_arrival_time(self, departure_time: datetime) -> datetime:
+        return departure_time + timedelta(days=7, hours=0)
+
+class ShippingDecorator(ShippingStrategy):
+    def __init__(self, wrapped: ShippingStrategy):
+        self._wrapped = wrapped
+
+    @abstractmethod
+    def calculate_cost(self) -> float:
+        pass
+
+    @abstractmethod
+    def get_delivery_steps(self, destination: str, origin: str, departure_time: datetime) -> List[str]:
+        pass
+
+    @abstractmethod
+    def calculate_arrival_time(self, departure_time: datetime) -> datetime:
+        pass
+
+class InsuranceDecorator(ShippingDecorator):
+    def calculate_cost(self) -> float:
+        return self._wrapped.calculate_cost() + 5.00
+
+    def get_delivery_steps(self, destination: str, origin: str, departure_time: datetime) -> List[str]:
+        return self._wrapped.get_delivery_steps(destination, origin, departure_time)
+
+    def calculate_arrival_time(self, departure_time: datetime) -> datetime:
+        return self._wrapped.calculate_arrival_time(departure_time)
+
+class PriorityDecorator(ShippingDecorator):
+    def calculate_cost(self) -> float:
+        return self._wrapped.calculate_cost() + 10.00
+
+    def get_delivery_steps(self, destination: str, origin: str, departure_time: datetime) -> List[str]:
+        return self._wrapped.get_delivery_steps(destination, origin, departure_time)
+
+    def calculate_arrival_time(self, departure_time: datetime) -> datetime:
+        return self._wrapped.calculate_arrival_time(departure_time)
+
+class CompanyStrategy(ShippingStrategy):
+    def calculate_cost(self) -> float:
+        return 0.00
+
+    @abstractmethod
+    def get_delivery_steps(self, destination: str, origin: str, departure_time: datetime) -> List[str]:
+        pass
+
+    @abstractmethod
+    def calculate_arrival_time(self, departure_time: datetime) -> datetime:
+        pass
+
+class Hanjin(CompanyStrategy):
+    def get_delivery_steps(self, destination: str, origin: str, departure_time: datetime) -> List[str]:
+        arrival_time = self.calculate_arrival_time(departure_time)
+        return [f"{origin}에서 {departure_time}에 출발", f"{destination}에 {arrival_time}에 도착"]
+
+    def calculate_arrival_time(self, departure_time: datetime) -> datetime:
+        return departure_time + timedelta(days=3, hours=3)
+
+class Logen(CompanyStrategy):
+    def get_delivery_steps(self, destination: str, origin: str, departure_time: datetime) -> List[str]:
+        arrival_time = self.calculate_arrival_time(departure_time)
+        return ["택배 발송", f"{origin}에서 출발", f"{destination}에 도착"]
+
+    def calculate_arrival_time(self, departure_time: datetime) -> datetime:
+        return departure_time + timedelta(days=2, hours=2)
+
+class PostOffice(CompanyStrategy):
+    def get_delivery_steps(self, destination: str, origin: str, departure_time: datetime) -> List[str]:
+        arrival_time = self.calculate_arrival_time(departure_time)
+        return ["접수", f"{arrival_time} 도착 예정", f"{destination}에 도착"]
+
+    def calculate_arrival_time(self, departure_time: datetime) -> datetime:
+        return departure_time + timedelta(days=1, hours=2)
+
+class CJ(CompanyStrategy):
+    def get_delivery_steps(self, destination: str, origin: str, departure_time: datetime) -> List[str]:
+        arrival_time = self.calculate_arrival_time(departure_time)
+        return ["접수", "방금 출발", "지금 배송 중", "오늘 도착 예정", f"{destination}에 도착"]
+
+    def calculate_arrival_time(self, departure_time: datetime) -> datetime:
+        return departure_time + timedelta(days=2, hours=5)
+
+class Lotte(CompanyStrategy):
+    def get_delivery_steps(self, destination: str, origin: str, departure_time: datetime) -> List[str]:
+        arrival_time = self.calculate_arrival_time(departure_time)
+        return ["배송 준비 완료", "배송 중", f"{destination}에 도착"]
+
+    def calculate_arrival_time(self, departure_time: datetime) -> datetime:
+        return departure_time + timedelta(days=3, hours=12)
+
 class ShippingFactory:
-    """
-    배송 전략을 생성하는 팩토리 클래스
-    """
     strategies: Dict[str, Type[ShippingStrategy]] = {
         "일반": StandardShipping,
         "익일": NextDayShipping,
         "국제": InternationalShipping
     }
 
-    def get_shipping_strategy(self, type: str) -> ShippingStrategy:
-        """
-        주어진 유형에 맞는 배송 전략 객체를 반환합니다.
-        :param type: 배송 유형
-        :return: 배송 전략 객체
-        :raises ValueError: 지원되지 않는 배송 유형일 경우
-        """
+    decorators: Dict[str, Type[ShippingDecorator]] = {
+        "보험": InsuranceDecorator,
+        "우선": PriorityDecorator
+    }
+
+    companies: Dict[str, Type[CompanyStrategy]] = {
+        "한진": Hanjin,
+        "로젠": Logen,
+        "우체국": PostOffice,
+        "CJ": CJ,
+        "롯데": Lotte
+    }
+
+    def get_shipping_strategy(self, type: str, decorator: Optional[str] = None, company: Optional[str] = None) -> ShippingStrategy:
         try:
-            return self.strategies[type]()
+            if company:
+                strategy = self.companies[company]()
+            else:
+                strategy = self.strategies[type]()
+                if decorator:
+                    strategy = self.decorators[decorator](strategy)
+            return strategy
         except KeyError:
-            raise ValueError(f"오류 발생: {type}는 지원되지 않는 배송 유형입니다.")
+            raise ValueError(f"오류 발생: {type} 또는 {decorator}는 지원되지 않는 옵션입니다.")
 
 class Subject:
-    """
-    상태 변화를 알리는 옵저버 패턴의 주체 클래스
-    """
     def __init__(self):
-        self._observers: Dict[str, List[weakref.ref]] = {}  # 이벤트 유형별 옵저버 관리
+        self._observers: Dict[str, List[weakref.ref]] = {}
         self._state: Optional[str] = None
 
     def attach(self, observer, event_type: str) -> None:
-        """
-        옵저버를 주어진 이벤트 유형에 등록합니다.
-        :param observer: 등록할 옵저버
-        :param event_type: 옵저버를 등록할 이벤트 유형
-        """
         if event_type not in self._observers:
             self._observers[event_type] = []
         self._observers[event_type].append(weakref.ref(observer))
 
     def detach(self, observer, event_type: str) -> None:
-        """
-        주어진 이벤트 유형에서 옵저버를 제거합니다.
-        :param observer: 제거할 옵저버
-        :param event_type: 옵저버를 제거할 이벤트 유형
-        """
         try:
             self._observers[event_type].remove(weakref.ref(observer))
         except (ValueError, KeyError):
             pass
 
     def notify(self, event_type: str) -> None:
-        """
-        주어진 이벤트 유형의 모든 옵저버에게 상태 변화를 알립니다.
-        :param event_type: 상태 변화를 알릴 이벤트 유형
-        """
         for weak_observer in self._observers.get(event_type, []):
             observer = weak_observer()
             if observer is not None:
                 observer.update(self._state)
 
     def set_state(self, state: str, event_type: str) -> None:
-        """
-        주어진 상태로 변경하고 해당 이벤트 유형의 옵저버들에게 알립니다.
-        :param state: 새로운 상태
-        :param event_type: 상태 변화를 알릴 이벤트 유형
-        """
         self._state = state
         self.notify(event_type)
 
 class Observer(ABC):
-    """
-    옵저버 인터페이스
-    """
     @abstractmethod
     def update(self, state: str) -> None:
-        """
-        주체의 상태 변화를 수신하여 처리합니다.
-        :param state: 주체의 새로운 상태
-        """
         pass
 
 class Branch(Observer):
-    """
-    지점을 나타내는 클래스, 옵저버 패턴의 구현체
-    """
     def __init__(self, name: str):
         self.name = name
 
     def update(self, state: str) -> None:
-        """
-        주체의 상태 변화를 로그로 기록합니다.
-        :param state: 주체의 새로운 상태
-        """
         logging.info(f"{self.name} 알림: {state}")
 
 class PackageTracker:
-    """
-    패키지 추적 기능을 제공하는 클래스
-    """
     def __init__(self, package_id: str):
         self.package_id = package_id
         self.history = []
 
     def update_status(self, status: str):
-        """
-        패키지 상태를 업데이트하고 기록합니다.
-        :param status: 새로운 상태
-        """
         self.history.append(status)
         logging.info(f"패키지 {self.package_id} 상태 업데이트: {status}")
 
     def get_history(self) -> List[str]:
-        """
-        패키지의 전체 상태 기록을 반환합니다.
-        :return: 상태 기록 리스트
-        """
         return self.history
 
 class TrackedPackage(Subject):
-    """
-    상태 변화를 알리는 옵저버 패턴의 주체 클래스, 패키지 추적 기능 포함
-    """
     def __init__(self, package_id: str):
         super().__init__()
         self.tracker = PackageTracker(package_id)
 
     def set_state(self, state: str, event_type: str) -> None:
-        """
-        주어진 상태로 변경하고 해당 이벤트 유형의 옵저버들에게 알립니다.
-        :param state: 새로운 상태
-        :param event_type: 상태 변화를 알릴 이벤트 유형
-        """
         self.tracker.update_status(state)
         self._state = state
         self.notify(event_type)
 
-def setup_tracked_package(destination: str, shipping_type: str, package_id: str) -> None:
-    """
-    배송 옵션 및 목적지를 설정하고 처리하는 함수, 패키지 추적 기능 포함
-    :param destination: 배송 목적지
-    :param shipping_type: 배송 유형
-    :param package_id: 패키지 ID
-    """
+def setup_tracked_package(destination: str, origin: str, departure_time: datetime, shipping_type: str, package_id: str, decorator: Optional[str], company: Optional[str]) -> None:
     package = TrackedPackage(package_id)
     branch_name = destination.capitalize() + " 지점"
     branch = Branch(branch_name)
-    package.attach(branch, "배송 시작")
+    package.attach(branch, "배송 상태")
 
-    shipping_option = shipping_factory.get_shipping_strategy(shipping_type)
-    logging.info(f"패키지 ID: {package_id} - 목적지: {destination} - 배송 유형: {shipping_type} - 비용: {shipping_option.calculate_cost()} 원")
+    shipping_option = shipping_factory.get_shipping_strategy(shipping_type, decorator, company)
+    arrival_time = shipping_option.calculate_arrival_time(departure_time)
+    logging.info(f"패키지 ID: {package_id} - 목적지: {destination} - 출발지: {origin} - 출발 시간: {departure_time} - 도착 시간: {arrival_time} - 배송 유형: {shipping_type} - 데코레이터: {decorator} - 택배 회사: {company} - 비용: {shipping_option.calculate_cost()} 원")
 
-    package.set_state("배송 준비 완료", "배송 시작")
-    package.set_state("배송 중", "배송 중")
-    package.set_state(destination + "에 도착", "배송 도착")
-    package.detach(branch, "배송 도착")
-    package.set_state("배송 완료", "배송 완료")
+    steps = shipping_option.get_delivery_steps(destination, origin, departure_time)
+    for step in steps:
+        package.set_state(step, "배송 상태")
+    package.detach(branch, "배송 상태")
 
-    # 배송 기록 출력
     logging.info(f"패키지 {package_id} 배송 기록: {package.tracker.get_history()}")
 
-# 전역 변수로 팩토리 인스턴스를 초기화
 shipping_factory = ShippingFactory()
 
-# 예제 실행: 다양한 목적지와 배송 옵션을 사용
-destinations = ["용인", "서울", "부산"]
-shipping_types = ["일반", "익일", "국제"]
+# 목적지와 출발지, 출발 시간, 배송 방법, 데코레이터, 택배 회사 선택
+origin = input('출발지를 입력해주세요: ').strip()
+destination = input('목적지를 입력해주세요: ').strip()
+departure_time_str = input('출발 시간을 입력해주세요 (예: 2024-05-18 14:30): ').strip()
+departure_time = datetime.strptime(departure_time_str, '%Y-%m-%d %H:%M')
+shipping_type = input('배송 방법을 입력해주세요 (일반/익일/국제): ').strip()
+decorator = input('적용할 데코레이터를 입력해주세요 (보험/우선/없음): ').strip()
+decorator = None if decorator == "없음" else decorator
+company = input('택배 회사를 선택해주세요 (한진/로젠/우체국/CJ/롯데): ').strip()
 
-for destination in destinations:
-    for shipping_type in shipping_types:
-        package_id = f"{destination}_{shipping_type}_{hash(destination + shipping_type)}"
-        setup_tracked_package(destination, shipping_type, package_id)
-
-# 오류 처리: 알 수 없는 배송 타입 처리
-try:
-    setup_tracked_package("인천", "알 수 없는 유형", "incheon_unknown")
-except ValueError as e:
-    logging.error(e)
-
-# 추가 예제: 다양한 목적지와 배송 옵션을 사용한 추가 테스트
-additional_destinations = ["대구", "광주", "대전"]
-additional_shipping_types = ["일반", "익일", "국제"]
-
-for destination in additional_destinations:
-    for shipping_type in additional_shipping_types:
-        package_id = f"{destination}_{shipping_type}_{hash(destination + shipping_type)}"
-        setup_tracked_package(destination, shipping_type, package_id)
+# 패키지 ID 생성 및 설정
+package_id = f"{destination}_{origin}_{departure_time_str}_{shipping_type}_{company}_{hash(destination + origin + departure_time_str + shipping_type + company)}"
+setup_tracked_package(destination, origin, departure_time, shipping_type, package_id, decorator, company)
